@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Biliard POS</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--line:#e3e6ea;--tx:#1d2330;--mu:#6b7585;--ac:#0f7a4d;--acl:#e6f4ed;--warn:#fff4d6;--wb:#e0a800;--r:#d6453d}
+*{box-sizing:border-box}body{margin:0;font:15px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:8px 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header>b{color:var(--ac);font-size:17px}nav{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--tx);padding:9px 12px;border-radius:8px;cursor:pointer}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}button.grn{background:var(--ac);color:#fff;border:0;font-weight:600}
+button.red{background:var(--r);color:#fff;border:0}button.s{padding:4px 10px}button.w{width:100%;margin:6px 0}
+main{padding:12px;max-width:1100px;margin:auto}h3{margin:18px 0 8px}.muted{color:var(--mu)}
+.grid{display:grid;gap:8px}.grid.t{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}.grid.p{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.tb{background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:10px;min-height:84px;display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.tb.busy{border-color:var(--wb);background:var(--warn)}.tb.bar{border-style:dashed}.tb span{font-variant-numeric:tabular-nums;color:var(--mu)}.tb.busy span{color:var(--tx)}.tb small{color:var(--ac);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.form{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.form label{display:grid;gap:3px;color:var(--mu);font-size:13px}
+input,select{font:inherit;padding:9px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--tx);width:100%}
+.ck{display:flex!important;align-items:center;gap:6px}.ck input{width:auto}
+.pc{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:3px;cursor:pointer}
+.pc span{color:var(--ac);font-weight:700}.pc small{color:var(--mu)}.pc small.low{color:var(--r)}
+.ad{position:absolute;top:6px;right:6px;background:var(--r);color:#fff;font-style:normal;font-size:11px;padding:1px 6px;border-radius:6px}
+.ov{position:fixed;inset:0;background:#0007;z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.box{background:#fff;width:100%;max-width:640px;max-height:94vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px}
+@media(min-width:700px){.ov{align-items:center}.box{border-radius:16px}}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.it{padding:7px 0;border-bottom:1px solid var(--line)}
+.big{font-size:26px;font-weight:700;color:var(--ac);text-align:center;margin:6px 0}.sum{background:var(--acl);padding:10px;border-radius:10px;margin:8px 0;text-align:right}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 10px}.kv b{text-align:right}.g{color:var(--ac)}.r{color:var(--r)}
+.bars{display:flex;gap:6px;align-items:flex-end;height:170px;padding-top:8px}.bars>div{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;font-size:12px}
+.bars i{width:100%;background:var(--ac);border-radius:5px 5px 0 0;min-height:2px}.bars small{color:var(--mu)}
+</style></head><body>
+<header><b>🎱 Biliard POS</b><nav id="nav"></nav></header><main id="app"></main><div id="modal"></div>
+<script>
+const $=s=>document.querySelector(s),LS='biliardpos2';
+const rub=n=>Math.round(n||0).toLocaleString('ru-RU')+" so'm";
+const day=d=>{d=d?new Date(d):new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const W=['Yak','Dush','Sesh','Chor','Pay','Jum','Shan'];
+const seed=()=>({rate:40000,tables:Array.from({length:30},(_,i)=>({id:i+1,start:null,items:{}})),bar:{items:{}},products:[],sales:[],buys:[],staff:[]});
+let S=JSON.parse(localStorage.getItem(LS)||'null')||seed(),tab='tables',cur=null;
+const save=()=>{try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){alert("Xotira to'ldi. Zaxira oling.")}};
+const P=id=>S.products.find(p=>p.id===id),pn=p=>p.name+(p.size?' '+p.size:''),pname=p=>esc(pn(p));
+const fmt=ms=>{ms=Math.max(0,ms)/1000|0;return [ms/3600|0,(ms/60|0)%60,ms%60].map(x=>String(x).padStart(2,'0')).join(':')};
+const tSum=t=>t.start?Math.round(Math.ceil((Date.now()-t.start)/60000)*S.rate/60/500)*500:0;
+const iSum=t=>Object.entries(t.items).reduce((a,[id,q])=>a+(P(id)?P(id).price*q:0),0);
+const TABS=[['tables','🎱 Stollar'],['stock','📦 Menyu / Ombor'],['staff','👤 Shogirdlar'],['rep','📊 Hisobot']];
+function render(){$('#nav').innerHTML=TABS.map(([k,v])=>`<button class="${k==tab?'on':''}" onclick="tab='${k}';render()">${v}</button>`).join('');({tables:vTables,stock:vStock,staff:vStaff,rep:vRep})[tab]()}
+/* STOLLAR */
+function vTables(){const act=S.tables.filter(t=>t.start).length;
+$('#app').innerHTML=`<p class="muted">Band: ${act}/30 · 1 soat: ${rub(S.rate)} <button class="s" onclick="setRate()">o'zgartirish</button></p><div class="grid t"><div class="tb bar" onclick="openT('bar')"><b>🛒 Bar</b><small>stolsiz sotuv</small></div>${S.tables.map(t=>`<div class="tb ${t.start?'busy':''}" onclick="openT(${t.id})"><b>${t.id}-stol</b><span>${t.start?fmt(Date.now()-t.start):"Bo'sh"}</span><small>${t.start||Object.keys(t.items).length?rub(tSum(t)+iSum(t)):''}</small></div>`).join('')}</div>`}
+function setRate(){const v=+prompt("1 soat narxi (so'm):",S.rate);if(v>0){S.rate=v;save();render()}}
+function openT(id){cur=id==='bar'?S.bar:S.tables[id-1];mdl()}
+function closeM(){cur=null;$('#modal').innerHTML='';render()}
+function mdl(){const t=cur,bar=t===S.bar;
+$('#modal').innerHTML=`<div class="ov"><div class="box"><div class="row"><h3 style="margin:0">${bar?'🛒 Bar':t.id+'-stol'}</h3><button class="s" onclick="closeM()">✕</button></div>
+${bar?'':t.start?'<div class="big" id="tm"></div>':'<button class="grn w" onclick="startT()">▶ Vaqtni boshlash</button>'}
+<div id="ol"></div><div id="sm" class="sum"></div><button class="grn w" onclick="pay()">✅ Hisoblash va yopish</button>
+<h3>Mahsulot qo'shish</h3><input id="q" placeholder="🔍 Qidirish" oninput="pl()"><br><br><div id="pl" class="grid p"></div></div></div>`;ol();pl()}
+function startT(){cur.start=Date.now();save();mdl()}
+function upd(){if(!cur)return;const t=cur,a=$('#tm');if(a)a.textContent=fmt(Date.now()-t.start)+' · '+rub(tSum(t));
+const s=$('#sm');if(s)s.innerHTML=`${t.start?`Vaqt: ${rub(tSum(t))}<br>`:''}Mahsulot: ${rub(iSum(t))}<br><b>Jami: ${rub(tSum(t)+iSum(t))}</b>`}
+function ol(){$('#ol').innerHTML=Object.entries(cur.items).map(([id,q])=>{const p=P(id);return p?`<div class="row it"><span>${pname(p)}</span><span><button class="s" onclick="chg('${id}',-1)">−</button> ${q} <button class="s" onclick="chg('${id}',1)">+</button></span><b>${rub(p.price*q)}</b></div>`:''}).join('');upd()}
+function pl(){const q=($('#q').value||'').toLowerCase(),L=S.products.filter(p=>pn(p).toLowerCase().includes(q));
+$('#pl').innerHTML=L.map(p=>`<div class="pc" onclick="chg('${p.id}',1)">${p.adult?'<i class="ad">18+</i>':''}<b>${pname(p)}</b><span>${rub(p.price)}</span></div>`).join('')||'<p class="muted">Menyu bo\'sh. "Menyu / Ombor" bo\'limidan mahsulot qo\'shing.</p>'}
+function chg(id,d){const t=cur;t.items[id]=(t.items[id]||0)+d;if(t.items[id]<=0)delete t.items[id];save();ol()}
+function pay(){const t=cur,ts=tSum(t),is=iSum(t);if(!ts&&!is)return closeM();if(!confirm('Jami '+rub(ts+is)+'. Hisoblab yopilsinmi?'))return;
+let cost=0,items=[];for(const[id,q]of Object.entries(t.items)){const p=P(id);if(!p)continue;cost+=p.cost*q;p.stock-=q;items.push({n:pn(p),q,p:p.price})}
+S.sales.push({id:uid(),d:day(),ts:Date.now(),tbl:t===S.bar?0:t.id,min:t.start?Math.ceil((Date.now()-t.start)/60000):0,tsum:ts,isum:is,cost,items});
+t.start=null;t.items={};save();closeM()}
+/* MENYU / OMBOR */
+function vStock(){$('#app').innerHTML=`<h3 style="margin-top:0">📥 Yangi yuk qo'shish</h3><div class="card"><div class="form">
+<label>Nomi<input id="n" placeholder="Masalan: Pepsi"></label><label>Hajmi<input id="z" placeholder="0.5 l / katta"></label>
+<label>Soni<input id="qt" type="number"></label><label>Kelgan narxi<input id="cs" type="number"></label><label>Sotish narxi<input id="sl" type="number"></label>
+<label class="ck"><input id="ad" type="checkbox"> 18+ (energetik)</label></div><br>
+<button class="grn w" onclick="addStock()">Omborga qo'shish</button><small class="muted">Shu nom va hajmli mahsulot bo'lsa, soni qo'shiladi, narxlar yangilanadi.</small></div>
+<h3>🍽 Menyu va ombor (bosib tahrirlang)</h3><div class="grid p">${S.products.map(p=>`<div class="pc" onclick="editP('${p.id}')">${p.adult?'<i class="ad">18+</i>':''}<b>${pname(p)}</b><span>${rub(p.price)}</span><small class="${p.stock<=3?'low':''}">Omborda: ${p.stock}</small><small>Kelgan: ${rub(p.cost)}</small></div>`).join('')||'<p class="muted">Menyu bo\'sh. Yuqoridan birinchi mahsulotni qo\'shing.</p>'}</div>
+<h3>Oxirgi yuklar</h3>${S.buys.slice(-15).reverse().map(b=>`<div class="row it"><span>${b.d.slice(5)} · ${esc(b.name)} × ${b.qty}</span><span>${rub(b.cost)} → ${rub(b.sell)}</span></div>`).join('')||'<p class="muted">Hali yuk kiritilmagan</p>'}`}
+function addStock(){const g=i=>$('#'+i).value.trim(),name=g('n'),size=g('z'),qty=+g('qt')||0,cost=+g('cs')||0,sell=+g('sl')||0;
+if(!name||!sell)return alert('Nomi va sotish narxini kiriting');
+let p=S.products.find(x=>x.name.toLowerCase()==name.toLowerCase()&&x.size.toLowerCase()==size.toLowerCase());
+if(p){p.stock+=qty;p.cost=cost;p.price=sell;if($('#ad').checked)p.adult=true}
+else S.products.push({id:uid(),name,size,price:sell,cost,stock:qty,adult:$('#ad').checked});
+S.buys.push({id:uid(),d:day(),name:name+(size?' '+size:''),qty,cost,sell});save();render()}
+function editP(id){const p=P(id);$('#modal').innerHTML=`<div class="ov"><div class="box"><h3 style="margin-top:0">${pname(p)}</h3><div class="form">
+<label>Nomi<input id="e1" value="${esc(p.name)}"></label><label>Hajmi<input id="e2" value="${esc(p.size)}"></label>
+<label>Sotish narxi<input id="e3" type="number" value="${p.price}"></label><label>Kelgan narxi<input id="e4" type="number" value="${p.cost}"></label>
+<label>Ombordagi soni<input id="e5" type="number" value="${p.stock}"></label><label class="ck"><input id="e6" type="checkbox" ${p.adult?'checked':''}> 18+</label></div><br>
+<div class="row"><button class="grn" onclick="saveP('${id}')">Saqlash</button><button class="red" onclick="delP('${id}')">O'chirish</button><button onclick="closeM()">Yopish</button></div></div></div>`}
+function saveP(id){const p=P(id);p.name=$('#e1').value.trim()||p.name;p.size=$('#e2').value.trim();p.price=+$('#e3').value||0;p.cost=+$('#e4').value||0;p.stock=+$('#e5').value||0;p.adult=$('#e6').checked;save();closeM()}
+function delP(id){if(confirm("Mahsulot o'chirilsinmi?")){S.products=S.products.filter(p=>p.id!==id);save();closeM()}}
+/* SHOGIRDLAR */
+function vStaff(){const m=day().slice(0,7);$('#app').innerHTML=`<div class="card"><div class="form"><input id="sn" placeholder="Shogird ismi"><input id="ss" type="number" placeholder="Oylik (so'm)"><button class="grn" onclick="addSt()">Qo'shish</button></div></div>`+
+S.staff.map(s=>{const paid=s.pay.filter(x=>x.d.startsWith(m)),sum=paid.reduce((a,x)=>a+x.a,0),ab=s.abs.filter(x=>x.startsWith(m));
+return `<div class="card"><div class="row"><b>👤 ${esc(s.name)}</b><b>${rub(s.salary)}</b></div><p>Shu oy berilgan: <b class="g">${rub(sum)}</b> · Qolgan: <b>${rub(s.salary-sum)}</b></p>
+<p class="muted">${paid.map(x=>x.d.slice(5)+': '+rub(x.a)).join(', ')||"Hali oylik berilmagan"}</p><p>Kelmagan kunlar (${ab.length}): ${ab.map(x=>x.slice(5)).join(', ')||'—'}</p>
+<div class="row"><button class="grn" onclick="payS('${s.id}')">💵 Oylik berish</button><button class="red" onclick="absS('${s.id}')">🚫 Kelmagan kun</button><button class="s" onclick="delS('${s.id}')">🗑</button></div></div>`}).join('')}
+function addSt(){const n=$('#sn').value.trim();if(!n)return;S.staff.push({id:uid(),name:n,salary:+$('#ss').value||0,pay:[],abs:[]});save();render()}
+function payS(id){const s=S.staff.find(x=>x.id==id),a=+prompt("Qancha berildi (so'm)?",s.salary);if(a>0){s.pay.push({d:day(),a});save();render()}}
+function absS(id){const s=S.staff.find(x=>x.id==id),d=prompt('Kelmagan sana (YYYY-MM-DD):',day());if(d&&/^\d{4}-\d\d-\d\d$/.test(d)){s.abs.push(d);save();render()}}
+function delS(id){if(confirm("Shogird o'chirilsinmi?")){S.staff=S.staff.filter(x=>x.id!=id);save();render()}}
+/* HISOBOT */
+function agg(f){const r={tab:0,fd:0,cost:0};S.sales.filter(s=>f(s.d)).forEach(s=>{r.tab+=s.tsum;r.fd+=s.isum;r.cost+=s.cost});
+r.sal=S.staff.reduce((a,s)=>a+s.pay.filter(x=>f(x.d)).reduce((b,x)=>b+x.a,0),0);r.buy=S.buys.filter(b=>f(b.d)).reduce((a,b)=>a+b.qty*b.cost,0);
+r.inc=r.tab+r.fd;r.out=r.buy+r.sal;r.profit=r.inc-r.cost-r.sal;return r}
+const box=(t,r)=>`<div class="card"><h3 style="margin-top:0">${t}</h3><div class="kv"><span>🎱 Stol vaqti</span><b>${rub(r.tab)}</b><span>🌭 Mahsulot sotuvi</span><b>${rub(r.fd)}</b><span>Jami kirim</span><b class="g">${rub(r.inc)}</b>
+<span>📦 Ombor xaridi</span><b>${rub(r.buy)}</b><span>💵 Shogird oyligi</span><b>${rub(r.sal)}</b><span>Jami chiqim</span><b class="r">${rub(r.out)}</b>
+<span>Sotilgan tovar tannarxi</span><b>${rub(r.cost)}</b><span>✅ Sof foyda (kirim − tannarx − oylik)</span><b class="g">${rub(r.profit)}</b></div></div>`;
+const bars=a=>{const m=Math.max(1,...a.map(x=>x[1]));return `<div class="bars">${a.map(([l,v])=>`<div><small>${v?Math.round(v/1000)+'k':''}</small><i style="height:${v/m*80}%"></i><b>${l}</b></div>`).join('')}</div>`};
+function vRep(){const t=day(),m=t.slice(0,7),wd=[0,0,0,0,0,0,0];S.sales.forEach(s=>wd[new Date(s.d+'T12:00').getDay()]+=s.tsum+s.isum);
+const order=[1,2,3,4,5,6,0],best=wd.indexOf(Math.max(...wd)),last7=[];
+for(let i=6;i>=0;i--){const d=new Date(Date.now()-i*864e5),k=day(d);last7.push([W[d.getDay()],S.sales.filter(s=>s.d==k).reduce((a,s)=>a+s.tsum+s.isum,0)])}
+$('#app').innerHTML=box('📅 Bugun',agg(d=>d==t))+box('🗓 Shu oy',agg(d=>d.startsWith(m)))+
+`<div class="card"><h3 style="margin-top:0">Oxirgi 7 kun savdosi</h3>${bars(last7)}</div>
+<div class="card"><h3 style="margin-top:0">Hafta kunlari bo'yicha savdo</h3>${Math.max(...wd)?`<p class="muted">Eng ko'p savdo: <b class="g">${W[best]}</b></p>`:''}${bars(order.map(i=>[W[i],wd[i]]))}</div>
+<h3>Bugungi savdolar</h3>${S.sales.filter(s=>s.d==t).reverse().map(s=>`<div class="row it"><span>${new Date(s.ts).toTimeString().slice(0,5)} · ${s.tbl?s.tbl+'-stol, '+s.min+' daq':'Bar'}</span><b>${rub(s.tsum+s.isum)}</b></div>`).join('')||'<p class="muted">Hali savdo yo\'q</p>'}
+<h3>💾 Zaxira</h3><div class="row"><button onclick="bak()">⬇ Yuklab olish</button><button onclick="$('#rf').click()">⬆ Tiklash</button><input id="rf" type="file" accept=".json" hidden onchange="rest(this.files[0])"></div>`}
+function bak(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download='biliard-zaxira-'+day()+'.json';a.click()}
+function rest(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{S=JSON.parse(r.result);save();render()}catch(e){alert("Fayl noto'g'ri")}};r.readAsText(f)}
+setInterval(()=>{if(cur)upd();else if(tab=='tables'&&!$('#modal').innerHTML)vTables()},1000);
+render();
+</script></body></html>
